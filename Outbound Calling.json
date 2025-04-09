@@ -1,0 +1,223 @@
+{
+  "name": "Interia - Outbound Calling",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": "cron",
+        "cronExpression": "*/5 * * * *"
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        300
+      ],
+      "id": "250a7e57-70f5-4e9d-836e-a7d19c672009"
+    },
+    {
+      "parameters": {
+        "authentication": "airtableApi",
+        "baseId": "YOUR_BASE_ID",
+        "tableId": "Leads",
+        "operation": "search",
+        "returnAll": true,
+        "view": "Leads to Call",
+        "limit": 1
+      },
+      "name": "Airtable (Search records)",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 1,
+      "position": [
+        660,
+        300
+      ],
+      "id": "41b38c6b-2586-45d9-a911-b4e697a4d19b",
+      "credentials": {
+        "airtableApi": {
+          "id": "PLACEHOLDER_CREDENTIAL_ID",
+          "name": "Airtable account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "{{ $input.all() }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Any leads to call?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        880,
+        300
+      ],
+      "id": "9f11f13e-5f12-4b7a-889b-e0c22a66d1f1"
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        200
+      ],
+      "id": "a0b1c2d3-e4f5-6a7b-8c9d-0e1f2a3b4c5d"
+    },
+    {
+      "parameters": {
+        "url": "https://api.vapi.ai/call/phone",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "headerAuth",
+        "sendHeaders": true,
+        "headerParameters": {},
+        "sendBody": true,
+        "contentType": "application/json",
+        "bodyParametersJson": "{\n  \"phoneNumberId\": \"YOUR_VAPI_PHONE_NUMBER_ID\",\n  \"assistantId\": \"YOUR_VAPI_ASSISTANT_ID\",\n  \"customer\": {\n    \"number\": \"{{ $json.Mobile }}\"\n  },\n  \"metadata\": {\n    \"leadId\": \"{{ $json.RecordID }}\",\n    \"clientName\": \"{{ $json.FirstName }}\"\n  }\n}",
+        "options": {}
+      },
+      "name": "HTTP Request (Initiate Vapi Call)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1320,
+        200
+      ],
+      "id": "b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e",
+      "credentials": {
+        "genericCredential": {
+          "id": "PLACEHOLDER_CREDENTIAL_ID",
+          "name": "Generic Credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "airtableApi",
+        "operation": "update",
+        "baseId": "YOUR_BASE_ID",
+        "tableId": "Leads",
+        "recordId": "{{ $node[\"Loop Over Items\"].json.RecordID }}",
+        "typecast": true,
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "Status",
+              "fieldValue": "In-Progress"
+            },
+            {
+              "fieldId": "VapiCallID",
+              "fieldValue": "{{ $node[\"HTTP Request (Initiate Vapi Call)\"].json.id }}"
+            }
+          ]
+        }
+      },
+      "name": "Airtable (Update record)",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        200
+      ],
+      "id": "c2d3e4f5-a6b7-8c9d-0e1f-2a3b4c5d6e7f",
+      "credentials": {
+        "airtableApi": {
+          "id": "PLACEHOLDER_CREDENTIAL_ID",
+          "name": "Airtable account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "name": "End Workflow (No Leads)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        400
+      ],
+      "id": "d3e4f5a6-b7c8-9d0e-1f2a-3b4c5d6e7f8a"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Airtable (Search records)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable (Search records)": {
+      "main": [
+        [
+          {
+            "node": "Any leads to call?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any leads to call?": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "End Workflow (No Leads)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request (Initiate Vapi Call)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request (Initiate Vapi Call)": {
+      "main": [
+        [
+          {
+            "node": "Airtable (Update record)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "staticData": null,
+  "pinData": {},
+  "versionId": "PLACEHOLDER_VERSION_ID",
+  "triggerCount": 1,
+  "active": false
+}
